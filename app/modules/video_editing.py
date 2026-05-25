@@ -6,8 +6,13 @@ from pathlib import Path
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
 from app.utils.compat_encode import (
-    audio_encode_args, audio_resample_filter, container_args,
-    even_dimensions_filter, run_ffmpeg, video_encode_args,
+    append_maps_and_codecs,
+    audio_resample_filter,
+    container_args,
+    even_dimensions_filter,
+    has_audio_stream,
+    run_ffmpeg,
+    video_encode_args,
 )
 
 # FFmpeg cannot cut segments shorter than this (seconds)
@@ -28,28 +33,29 @@ class VideoEditingModule(BaseModule):
         if cfg.get("auto_cut", True) and (context.scene_cuts or context.duplicate_segments):
             video = self._apply_auto_cut(context, video, cfg)
 
+        has_audio = has_audio_stream(video)
         vf_filters = self._build_video_filters(context, cfg)
         af_filters = []
 
         speed = cfg.get("speed_change", 1.0)
-        if speed and speed != 1.0:
-            af_filters.append(
-                f"atempo={speed},{audio_resample_filter()}"
-            )
+        if has_audio and speed and speed != 1.0:
+            # atempo valid range 0.5–2.0
+            tempo = max(0.5, min(2.0, float(speed)))
+            af_filters.append(f"atempo={tempo},{audio_resample_filter()}")
 
         if vf_filters:
             vf_filters.append(even_dimensions_filter())
         else:
             vf_filters = [even_dimensions_filter()]
 
-        args = ["-i", str(video), "-vf", ",".join(vf_filters)]
-        if af_filters:
-            args.extend(["-af", ",".join(af_filters)])
-        args.extend(["-map", "0:v:0", "-map", "0:a:0?"])
-        args.extend(video_encode_args(23, "medium"))
         post_cfg = context.get_setting("postprocessing", default={})
         abr = post_cfg.get("output_audio_bitrate", "256k") if isinstance(post_cfg, dict) else "256k"
-        args.extend(audio_encode_args(abr))
+
+        args = ["-i", str(video), "-vf", ",".join(vf_filters)]
+        if has_audio and af_filters:
+            args.extend(["-af", ",".join(af_filters)])
+
+        append_maps_and_codecs(args, has_audio=has_audio, crf=23, preset="medium", audio_bitrate=abr)
         args.extend(container_args())
         args.append(str(output))
 
@@ -114,14 +120,13 @@ class VideoEditingModule(BaseModule):
                 f.write(f"file '{p.resolve()}'\n")
 
         cut_output = context.get_working_path("autocut_video.mp4")
-        args = [
-            "-f", "concat", "-safe", "0", "-i", str(concat_file),
-            "-vf", even_dimensions_filter(),
-            *video_encode_args(23, "fast"),
-            *audio_encode_args("192k"),
-            *container_args(),
-            str(cut_output),
-        ]
+        has_audio = has_audio_stream(video)
+        args = ["-f", "concat", "-safe", "0", "-i", str(concat_file), "-vf", even_dimensions_filter()]
+        post_cfg = context.get_setting("postprocessing", default={})
+        abr = post_cfg.get("output_audio_bitrate", "256k") if isinstance(post_cfg, dict) else "256k"
+        append_maps_and_codecs(args, has_audio=has_audio, crf=23, preset="fast", audio_bitrate=abr)
+        args.extend(container_args())
+        args.append(str(cut_output))
         run_ffmpeg(args, "Auto-cut concat")
         return cut_output
 

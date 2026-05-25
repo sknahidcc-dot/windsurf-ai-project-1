@@ -6,13 +6,13 @@ from pathlib import Path
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
 from app.utils.compat_encode import (
-    audio_encode_args,
+    append_maps_and_codecs,
     can_remux_copy,
     container_args,
     even_dimensions_filter,
+    has_audio_stream,
     metadata_args,
     run_ffmpeg,
-    video_encode_args,
 )
 
 
@@ -56,10 +56,15 @@ class ExportModule(BaseModule):
             args.append(str(final_path))
             run_ffmpeg(args, "Export remux")
         else:
-            args = ["-i", str(video), "-map", "0:v:0", "-map", "0:a:0?"]
-            args.extend(["-vf", even_dimensions_filter()])
-            args.extend(video_encode_args(int(cfg.get("output_crf", 23)), cfg.get("output_preset", "medium")))
-            args.extend(audio_encode_args(abr))
+            has_audio = has_audio_stream(video)
+            args = ["-i", str(video), "-vf", even_dimensions_filter()]
+            append_maps_and_codecs(
+                args,
+                has_audio=has_audio,
+                crf=int(cfg.get("output_crf", 23)),
+                preset=cfg.get("output_preset", "medium"),
+                audio_bitrate=abr,
+            )
             if meta:
                 args.extend(metadata_args(meta["title"], meta["artist"], meta["creation_time"]))
             args.extend(container_args())

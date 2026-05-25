@@ -6,10 +6,12 @@ from pathlib import Path
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
 from app.utils.compat_encode import (
+    append_maps_and_codecs,
     audio_encode_args,
     audio_resample_filter,
     can_remux_copy,
     container_args,
+    has_audio_stream,
     run_ffmpeg,
 )
 
@@ -86,7 +88,7 @@ class AudioProcessingModule(BaseModule):
             semitones = cfg.get("pitch_shift_semitones", 0.15)
             pitch_factor = 2 ** (semitones / 12)
             filters.append(
-                f"asetrate=48000*{pitch_factor},aresample=48000:resampler=soxr,"
+                f"asetrate=48000*{pitch_factor},aresample=48000,"
                 f"atempo={1/pitch_factor:.6f}"
             )
 
@@ -95,7 +97,7 @@ class AudioProcessingModule(BaseModule):
             semitones = min(cfg.get("pitch_shift_semitones", 0.15), 0.2)
             pitch_factor = 2 ** (semitones / 12)
             filters.append(
-                f"asetrate=48000*{pitch_factor},aresample=48000:resampler=soxr,"
+                f"asetrate=48000*{pitch_factor},aresample=48000,"
                 f"atempo={1/pitch_factor:.6f}"
             )
 
@@ -108,11 +110,13 @@ class AudioProcessingModule(BaseModule):
 
     def _process_in_one_pass(self, video: Path, output: Path, af_chain: str, abr: str) -> None:
         """One FFmpeg pass: copy video, process audio only."""
+        if not has_audio_stream(video):
+            self._remux_preserve(video, output, abr)
+            return
         args = [
             "-i", str(video),
-            "-map", "0:v:0", "-map", "0:a:0?",
-            "-c:v", "copy",
-            "-af", af_chain,
+            "-map", "0:v:0", "-c:v", "copy",
+            "-map", "0:a:0", "-af", af_chain,
             *audio_encode_args(abr),
             "-shortest",
             *container_args(),
@@ -133,15 +137,15 @@ class AudioProcessingModule(BaseModule):
             run_ffmpeg(args, "Audio remux")
             return
 
-        args = [
-            "-i", str(video),
-            "-map", "0:v:0", "-map", "0:a:0?",
-            "-c:v", "copy",
-            *audio_encode_args(abr),
-            "-shortest",
-            *container_args(),
-            str(output),
-        ]
+        if not has_audio_stream(video):
+            args = ["-i", str(video), "-map", "0:v:0", "-c:v", "copy", "-an", *container_args(), str(output)]
+        else:
+            args = [
+                "-i", str(video),
+                "-map", "0:v:0", "-c:v", "copy",
+                "-map", "0:a:0", *audio_encode_args(abr),
+                "-shortest", *container_args(), str(output),
+            ]
         run_ffmpeg(args, "Audio encode")
 
     def _mix_bgm(self, video: Path, output: Path, cfg: dict, af_chain: str | None, abr: str) -> None:
@@ -150,7 +154,7 @@ class AudioProcessingModule(BaseModule):
         voice_chain = af_chain or audio_resample_filter()
         fc = (
             f"[0:a]{voice_chain}[voice];"
-            f"[1:a]volume={bgm_vol},aresample=48000:resampler=soxr[bgm];"
+            f"[1:a]volume={bgm_vol},aresample=48000[bgm];"
             f"[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2,"
             f"alimiter=limit=0.98[audio]"
         )

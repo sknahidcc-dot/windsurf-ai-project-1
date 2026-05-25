@@ -22,19 +22,18 @@ def video_encode_args(crf: int = 23, preset: str = "medium") -> list[str]:
 
 
 def audio_encode_args(bitrate: str = "256k") -> list[str]:
-    """High-quality AAC tuned for clear speech and music."""
+    """AAC encoding — compatible with all standard FFmpeg Windows builds."""
     return [
         "-c:a", "aac",
         "-ar", "48000",
         "-ac", "2",
         "-b:a", bitrate,
-        "-aac_coder", "twoloop",
     ]
 
 
 def audio_resample_filter() -> str:
-    """High-quality resampler (use in -af chains)."""
-    return "aresample=48000:resampler=soxr"
+    """Resample audio (no soxr — not available on all Windows FFmpeg builds)."""
+    return "aresample=48000"
 
 
 def container_args() -> list[str]:
@@ -73,7 +72,15 @@ def probe_streams(path: Path | str) -> dict:
         "video_codec": video.get("codec_name", ""),
         "pix_fmt": video.get("pix_fmt", ""),
         "audio_codec": audio.get("codec_name", ""),
+        "has_audio": audio.get("codec_name") is not None,
     }
+
+
+def has_audio_stream(path: Path | str) -> bool:
+    try:
+        return probe_streams(path).get("has_audio", False)
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
+        return False
 
 
 def can_remux_copy(path: Path | str) -> bool:
@@ -87,3 +94,22 @@ def can_remux_copy(path: Path | str) -> bool:
         )
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
         return False
+
+
+def append_maps_and_codecs(
+    args: list[str],
+    *,
+    has_audio: bool,
+    video_bitrate_mode: bool = True,
+    crf: int = 23,
+    preset: str = "medium",
+    audio_bitrate: str = "256k",
+) -> None:
+    """Append -map and codec args; use -an when input has no audio."""
+    args.extend(["-map", "0:v:0"])
+    args.extend(video_encode_args(crf, preset))
+    if has_audio:
+        args.extend(["-map", "0:a:0"])
+        args.extend(audio_encode_args(audio_bitrate))
+    else:
+        args.append("-an")

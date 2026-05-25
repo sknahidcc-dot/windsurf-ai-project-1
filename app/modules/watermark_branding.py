@@ -4,7 +4,13 @@ from pathlib import Path
 
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
-from app.utils.compat_encode import run_ffmpeg, video_encode_args, audio_encode_args, container_args
+from app.utils.compat_encode import (
+    audio_encode_args,
+    container_args,
+    has_audio_stream,
+    run_ffmpeg,
+    video_encode_args,
+)
 
 
 class WatermarkBrandingModule(BaseModule):
@@ -39,15 +45,19 @@ class WatermarkBrandingModule(BaseModule):
             f"[0:v][wm]overlay={pos},scale=trunc(iw/2)*2:trunc(ih/2)*2[v]"
         )
 
+        has_audio = has_audio_stream(video)
         args = [
             "-i", str(video), "-i", str(wm_path),
             "-filter_complex", filter_complex,
-            "-map", "[v]", "-map", "0:a:0?",
+            "-map", "[v]",
             *video_encode_args(23, "medium"),
-            *audio_encode_args("192k"),
-            *container_args(),
-            str(output),
         ]
+        if has_audio:
+            args.extend(["-map", "0:a:0", *audio_encode_args("256k")])
+        else:
+            args.append("-an")
+        args.extend(container_args())
+        args.append(str(output))
         run_ffmpeg(args, "Watermark")
 
         context.current_video = output
