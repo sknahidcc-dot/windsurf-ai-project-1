@@ -3,6 +3,9 @@
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
 
+# Ignore duplicate runs shorter than this (avoids zero-length FFmpeg cuts)
+MIN_DUPLICATE_DURATION = 1.0
+
 
 class SceneDetectionModule(BaseModule):
     name = "scene_detection"
@@ -25,6 +28,10 @@ class SceneDetectionModule(BaseModule):
         if cfg.get("duplicate_frame_check", True):
             context.report(self.name, 60, "Checking duplicate frames...")
             duplicates = self._find_duplicates(video, cfg.get("duplicate_threshold", 0.95))
+
+        duplicates = [
+            (s, e) for s, e in duplicates if (e - s) >= MIN_DUPLICATE_DURATION
+        ]
 
         context.scene_cuts = scene_cuts
         context.duplicate_segments = duplicates
@@ -105,7 +112,8 @@ class SceneDetectionModule(BaseModule):
                     if dup_start is None:
                         dup_start = t - 1 / fps
                 elif dup_start is not None:
-                    duplicates.append((dup_start, t))
+                    if (t - dup_start) >= MIN_DUPLICATE_DURATION:
+                        duplicates.append((dup_start, t))
                     dup_start = None
 
             prev_frame = gray
@@ -113,5 +121,7 @@ class SceneDetectionModule(BaseModule):
 
         cap.release()
         if dup_start is not None:
-            duplicates.append((dup_start, frame_idx / fps))
+            end_t = frame_idx / fps
+            if (end_t - dup_start) >= MIN_DUPLICATE_DURATION:
+                duplicates.append((dup_start, end_t))
         return duplicates

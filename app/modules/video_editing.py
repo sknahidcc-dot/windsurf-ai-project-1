@@ -6,6 +6,9 @@ from pathlib import Path
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
 
+# FFmpeg cannot cut segments shorter than this (seconds)
+MIN_SEGMENT_DURATION = 0.5
+
 
 class VideoEditingModule(BaseModule):
     name = "video_editing"
@@ -54,25 +57,47 @@ class VideoEditingModule(BaseModule):
             from app.utils.ffmpeg import FFmpegHelper
             duration = FFmpegHelper.get_duration(video)
 
-        remove_ranges = list(context.duplicate_segments)
+        remove_ranges = self._merge_ranges(list(context.duplicate_segments))
         if not remove_ranges:
             return video
 
         keep_segments = self._invert_ranges(remove_ranges, duration)
-        if len(keep_segments) <= 1 and keep_segments[0][0] == 0:
+        keep_segments = [
+            (round(s, 3), round(e, 3))
+            for s, e in keep_segments
+            if (e - s) >= MIN_SEGMENT_DURATION
+        ]
+
+        if not keep_segments:
             return video
+
+        # Single segment spanning full video — no cut needed
+        if len(keep_segments) == 1 and keep_segments[0][0] <= 0.01:
+            if keep_segments[0][1] >= duration - 0.5:
+                return video
 
         concat_file = context.get_working_path("concat_list.txt")
         segment_paths = []
 
         for i, (start, end) in enumerate(keep_segments):
+            seg_duration = end - start
+            if seg_duration < MIN_SEGMENT_DURATION:
+                continue
+
             seg_path = context.get_working_path(f"segment_{i}.mp4")
             subprocess.run([
                 "ffmpeg", "-y", "-i", str(video),
-                "-ss", str(start), "-to", str(end),
-                "-c", "copy", str(seg_path),
+                "-ss", str(start), "-t", str(seg_duration),
+                "-c", "copy", "-avoid_negative_ts", "make_zero",
+                str(seg_path),
             ], capture_output=True, check=True)
             segment_paths.append(seg_path)
+
+        if not segment_paths:
+            return video
+
+        if len(segment_paths) == 1:
+            return segment_paths[0]
 
         with open(concat_file, "w", encoding="utf-8") as f:
             for p in segment_paths:
@@ -86,14 +111,30 @@ class VideoEditingModule(BaseModule):
 
         return cut_output
 
+    def _merge_ranges(self, ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        """Merge overlapping/adjacent remove ranges; drop tiny ranges."""
+        if not ranges:
+            return []
+        sorted_ranges = sorted(ranges, key=lambda r: r[0])
+        merged = [sorted_ranges[0]]
+        for start, end in sorted_ranges[1:]:
+            if end - start < MIN_SEGMENT_DURATION:
+                continue
+            prev_start, prev_end = merged[-1]
+            if start <= prev_end + 0.1:
+                merged[-1] = (prev_start, max(prev_end, end))
+            else:
+                merged.append((start, end))
+        return [(s, e) for s, e in merged if (e - s) >= MIN_SEGMENT_DURATION]
+
     def _invert_ranges(self, remove: list[tuple[float, float]], duration: float) -> list[tuple[float, float]]:
         keep = []
         pos = 0.0
         for start, end in sorted(remove):
-            if start > pos:
+            if start > pos and (start - pos) >= MIN_SEGMENT_DURATION:
                 keep.append((pos, start))
             pos = max(pos, end)
-        if pos < duration:
+        if pos < duration and (duration - pos) >= MIN_SEGMENT_DURATION:
             keep.append((pos, duration))
         return keep if keep else [(0.0, duration)]
 
