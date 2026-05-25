@@ -30,7 +30,8 @@ class VideoEditingModule(BaseModule):
 
         context.report(self.name, 10, "Building edit filter chain...")
 
-        if cfg.get("auto_cut", True) and (context.scene_cuts or context.duplicate_segments):
+        # Only cut when user explicitly enables it AND true duplicate spans were found
+        if cfg.get("auto_cut", False) and context.duplicate_segments:
             video = self._apply_auto_cut(context, video, cfg)
 
         has_audio = has_audio_stream(video)

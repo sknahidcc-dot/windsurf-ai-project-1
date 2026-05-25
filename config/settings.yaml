@@ -15,10 +15,8 @@ ai_analysis:
   scene_detection: true
   scene_threshold: 27.0
   min_scene_len: 15
-  duplicate_frame_check: true
-  duplicate_threshold: 0.95
-  # Logo/watermark detection & removal
-  logo_removal_enabled: true
+  duplicate_frame_check: false   # off — prevents unwanted video cuts
+  duplicate_threshold: 0.98
   # Whisper subtitles (pip install openai-whisper)
   whisper_subtitles: false
   whisper_model: base
@@ -30,14 +28,12 @@ ai_analysis:
   yolo_blur_faces: false
 
 editing:
-  auto_cut: true
+  auto_cut: false              # off — keeps full video/audio intact
   speed_change: 1.05
   crop_percent: 3
   mirror: false
   color_lut: cinematic
   resolution_scale: null
-  logo_removal_enabled: true
-  manual_logo_regions: []
   # Intro/outro (set paths in UI or here)
   intro_path: null
   outro_path: null

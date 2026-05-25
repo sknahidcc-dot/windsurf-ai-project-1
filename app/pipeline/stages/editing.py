@@ -1,4 +1,3 @@
-from app.modules.logo_removal import LogoRemovalModule
 from app.modules.video_editing import VideoEditingModule
 from app.modules.intro_outro import IntroOutroModule
 from app.modules.watermark_branding import WatermarkBrandingModule
@@ -12,7 +11,6 @@ class EditingStage(BaseStage):
     def get_modules(self):
         cfg = self.config.get("editing", {})
         return [
-            LogoRemovalModule(cfg),
             VideoEditingModule(cfg),
             IntroOutroModule(cfg),
             WatermarkBrandingModule(cfg),

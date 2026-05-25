@@ -92,9 +92,8 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         self.var_speed = ctk.DoubleVar(value=edit_cfg.get("speed_change", 1.05))
         self.var_crop = ctk.IntVar(value=edit_cfg.get("crop_percent", 3))
         self.var_mirror = ctk.BooleanVar(value=edit_cfg.get("mirror", False))
-        self.var_autocut = ctk.BooleanVar(value=edit_cfg.get("auto_cut", True))
+        self.var_autocut = ctk.BooleanVar(value=edit_cfg.get("auto_cut", False))
         self.var_color = ctk.StringVar(value=edit_cfg.get("color_lut", "cinematic"))
-        self.var_logo_remove = ctk.BooleanVar(value=edit_cfg.get("logo_removal_enabled", True))
         self.var_whisper = ctk.BooleanVar(value=ai_cfg.get("whisper_subtitles", False))
         self.var_yolo = ctk.BooleanVar(value=ai_cfg.get("yolo_enabled", False))
         self.var_burn_subs = ctk.BooleanVar(value=edit_cfg.get("burn_subtitles", True))
@@ -129,9 +128,9 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         ctk.CTkCheckBox(settings, text="Mirror (horizontal flip)", variable=self.var_mirror).grid(
             row=row, column=0, sticky="w", padx=8, pady=4
         )
-        ctk.CTkCheckBox(settings, text="Auto-cut duplicates", variable=self.var_autocut).grid(
-            row=row, column=1, sticky="w", padx=8, pady=4
-        )
+        ctk.CTkCheckBox(
+            settings, text="Auto-cut duplicates (may shorten video)", variable=self.var_autocut
+        ).grid(row=row, column=1, sticky="w", padx=8, pady=4)
         row += 1
 
         ctk.CTkLabel(settings, text="Color filter").grid(row=row, column=0, sticky="w", padx=8)
@@ -147,11 +146,8 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         )
         row += 1
 
-        ctk.CTkCheckBox(settings, text="Remove logos/watermarks", variable=self.var_logo_remove).grid(
-            row=row, column=0, sticky="w", padx=8
-        )
         ctk.CTkCheckBox(settings, text="Whisper subtitles", variable=self.var_whisper).grid(
-            row=row, column=1, sticky="w", padx=8
+            row=row, column=0, sticky="w", padx=8
         )
         row += 1
 
@@ -205,9 +201,18 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         progress_frame.grid(row=3, column=0, padx=24, pady=8, sticky="ew")
         progress_frame.grid_columnconfigure(0, weight=1)
 
-        self.progress_bar = ctk.CTkProgressBar(progress_frame)
-        self.progress_bar.grid(row=0, column=0, sticky="ew")
+        progress_row = ctk.CTkFrame(progress_frame, fg_color="transparent")
+        progress_row.grid(row=0, column=0, sticky="ew")
+        progress_row.grid_columnconfigure(0, weight=1)
+
+        self.progress_bar = ctk.CTkProgressBar(progress_row)
+        self.progress_bar.grid(row=0, column=0, sticky="ew", padx=(0, 12))
         self.progress_bar.set(0)
+
+        self.percent_label = ctk.CTkLabel(
+            progress_row, text="0%", width=48, font=ctk.CTkFont(size=14, weight="bold"),
+        )
+        self.percent_label.grid(row=0, column=1, sticky="e")
 
         self.status_label = ctk.CTkLabel(progress_frame, text="Ready", font=ctk.CTkFont(size=12), text_color="gray60")
         self.status_label.grid(row=1, column=0, sticky="w", pady=(4, 0))
@@ -297,7 +302,7 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
     def _get_overrides(self) -> dict:
         return {
             "ai_analysis": {
-                "logo_removal_enabled": self.var_logo_remove.get(),
+                "duplicate_frame_check": self.var_autocut.get(),
                 "whisper_subtitles": self.var_whisper.get(),
                 "yolo_enabled": self.var_yolo.get(),
             },
@@ -307,7 +312,6 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
                 "mirror": self.var_mirror.get(),
                 "auto_cut": self.var_autocut.get(),
                 "color_lut": self.var_color.get(),
-                "logo_removal_enabled": self.var_logo_remove.get(),
                 "intro_path": self.intro_path,
                 "outro_path": self.outro_path,
                 "watermark_path": self.watermark_path,
@@ -340,6 +344,7 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         self.cancel_btn.configure(state="normal")
         self.export_btn.configure(state="disabled")
         self.progress_bar.set(0)
+        self.percent_label.configure(text="0%")
         self.status_label.configure(text="Starting pipeline...")
 
         thread = threading.Thread(target=self._run_pipeline, daemon=True)
@@ -360,7 +365,9 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
             self.after(0, lambda: self._on_error(str(e)))
 
     def _update_progress(self, stage: str, percent: float, message: str):
-        self.progress_bar.set(percent / 100)
+        pct = max(0, min(100, int(round(percent))))
+        self.progress_bar.set(pct / 100)
+        self.percent_label.configure(text=f"{pct}%")
         self.status_label.configure(text=f"[{stage}] {message}")
 
     def _on_complete(self, report):
@@ -371,6 +378,7 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         if report.state == PipelineState.COMPLETED:
             self.output_path = Path(report.output_path) if report.output_path else None
             self.progress_bar.set(1)
+            self.percent_label.configure(text="100%")
             self.status_label.configure(
                 text=f"Done in {report.total_duration_sec:.1f}s — {self.output_path}"
             )
