@@ -1,5 +1,6 @@
 """Input validation and probe."""
 
+import json
 import shutil
 from pathlib import Path
 
@@ -28,17 +29,19 @@ class PreprocessingModule(BaseModule):
             return ModuleResult(ModuleStatus.FAILED, f"Unsupported format: {input_path.suffix}")
 
         context.report(self.name, 20, "Probing video...")
-        probe = FFmpegHelper.probe(input_path)
-        info = FFmpegHelper.get_video_info(input_path)
+        try:
+            probe = FFmpegHelper.probe(input_path)
+            info = FFmpegHelper.get_video_info(input_path, probe_data=probe)
+        except (RuntimeError, FileNotFoundError, json.JSONDecodeError) as e:
+            return ModuleResult(ModuleStatus.FAILED, str(e))
 
         context.probe_data = {**info, "format": probe.get("format", {})}
         context.current_video = input_path
 
-        # Copy to working dir for safe processing
+        # Copy to working dir with ASCII-safe name (fixes Unicode/long path issues on Windows)
         working_copy = context.get_working_path("input_copy" + input_path.suffix)
-        if not working_copy.exists():
-            context.report(self.name, 60, "Creating working copy...")
-            shutil.copy2(input_path, working_copy)
+        context.report(self.name, 60, "Creating working copy...")
+        shutil.copy2(input_path, working_copy)
         context.current_video = working_copy
 
         context.metadata_log["input"] = {

@@ -60,12 +60,9 @@ def run_ffmpeg(args: list[str], label: str = "FFmpeg") -> None:
 
 def probe_streams(path: Path | str) -> dict:
     """Return video/audio codec info for stream-copy decisions."""
-    cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json",
-        "-show_streams", str(path),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    data = json.loads(proc.stdout)
+    from app.utils.ffmpeg import run_ffprobe_json
+
+    data = run_ffprobe_json(path)
     video = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), {})
     audio = next((s for s in data.get("streams", []) if s.get("codec_type") == "audio"), {})
     return {
