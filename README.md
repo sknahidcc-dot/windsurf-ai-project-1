@@ -6,10 +6,12 @@ Local desktop app for automated video processing. Upload a raw video, run the pi
 
 | Category | Capabilities |
 |----------|-------------|
-| **Video** | 5% speed change, crop, mirror, color LUT filters, auto-cut duplicate segments, scene detection |
-| **Audio** | Noise reduction, multi-band EQ, BGM mix, audio fingerprint shift (pitch/tempo) |
-| **Metadata** | Strip original metadata, rewrite title/artist/creation time |
-| **Export** | H.264 compression, fast-start MP4 |
+| **Video** | Speed change, crop, mirror, color LUT, auto-cut duplicates, scene detection |
+| **Content break** | Logo/watermark removal, metadata rewrite, audio fingerprint shift |
+| **AI (optional)** | Whisper subtitles, YOLO face detection |
+| **Branding** | Intro/outro injection, custom watermark overlay |
+| **Audio** | Noise reduction, EQ, BGM mix |
+| **Export** | Windows-compatible H.264/AAC MP4 (plays in Media Player) |
 
 ## Requirements
 
@@ -31,6 +33,7 @@ venv\Scripts\activate        # Windows
 # source venv/bin/activate   # Mac/Linux
 
 pip install -r requirements.txt
+pip install -r requirements-ai.txt   # optional: Whisper + YOLO
 python main.py
 ```
 
@@ -122,6 +125,8 @@ Then set `ai_analysis.whisper_subtitles: true` in settings.
 | Drag-drop not working | Click browse instead; or `pip install tkinterdnd2` |
 | Slow processing | Normal for long videos; use shorter clips to test |
 | Import errors | Run `pip install -r requirements.txt` inside venv |
+| Video won't play in Media Player | Fixed: export uses H.264 yuv420p + AAC. Re-process with latest version. |
+| Whisper/YOLO skipped | Run `pip install -r requirements-ai.txt` and enable in UI |
 
 ## License
 

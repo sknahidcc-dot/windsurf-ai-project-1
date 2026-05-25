@@ -87,17 +87,26 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
 
         edit_cfg = self.config_data.get("editing", {})
         post_cfg = self.config_data.get("postprocessing", {})
+        ai_cfg = self.config_data.get("ai_analysis", {})
 
         self.var_speed = ctk.DoubleVar(value=edit_cfg.get("speed_change", 1.05))
         self.var_crop = ctk.IntVar(value=edit_cfg.get("crop_percent", 3))
         self.var_mirror = ctk.BooleanVar(value=edit_cfg.get("mirror", False))
         self.var_autocut = ctk.BooleanVar(value=edit_cfg.get("auto_cut", True))
         self.var_color = ctk.StringVar(value=edit_cfg.get("color_lut", "cinematic"))
+        self.var_logo_remove = ctk.BooleanVar(value=edit_cfg.get("logo_removal_enabled", True))
+        self.var_whisper = ctk.BooleanVar(value=ai_cfg.get("whisper_subtitles", False))
+        self.var_yolo = ctk.BooleanVar(value=ai_cfg.get("yolo_enabled", False))
+        self.var_burn_subs = ctk.BooleanVar(value=edit_cfg.get("burn_subtitles", True))
         self.var_noise = ctk.BooleanVar(value=post_cfg.get("noise_reduction", True))
         self.var_eq = ctk.BooleanVar(value=post_cfg.get("audio_eq", True))
         self.var_fingerprint = ctk.BooleanVar(value=post_cfg.get("audio_fingerprint_shift", True))
         self.var_metadata = ctk.BooleanVar(value=post_cfg.get("metadata_rewrite", True))
         self.var_bgm = ctk.BooleanVar(value=post_cfg.get("bgm_enabled", False))
+
+        self.intro_path: str | None = edit_cfg.get("intro_path")
+        self.outro_path: str | None = edit_cfg.get("outro_path")
+        self.watermark_path: str | None = edit_cfg.get("watermark_path") or edit_cfg.get("branding_path")
 
         row = 0
         ctk.CTkLabel(settings, text="Video transforms", font=ctk.CTkFont(weight="bold")).grid(
@@ -131,6 +140,39 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
             variable=self.var_color,
             values=["none", "warm", "cool", "cinematic", "vivid", "fade"],
         ).grid(row=row, column=1, sticky="ew", padx=8)
+        row += 1
+
+        ctk.CTkLabel(settings, text="AI & content", font=ctk.CTkFont(weight="bold")).grid(
+            row=row, column=0, columnspan=2, sticky="w", pady=(16, 4)
+        )
+        row += 1
+
+        ctk.CTkCheckBox(settings, text="Remove logos/watermarks", variable=self.var_logo_remove).grid(
+            row=row, column=0, sticky="w", padx=8
+        )
+        ctk.CTkCheckBox(settings, text="Whisper subtitles", variable=self.var_whisper).grid(
+            row=row, column=1, sticky="w", padx=8
+        )
+        row += 1
+
+        ctk.CTkCheckBox(settings, text="YOLO face detection", variable=self.var_yolo).grid(
+            row=row, column=0, sticky="w", padx=8
+        )
+        ctk.CTkCheckBox(settings, text="Burn subtitles", variable=self.var_burn_subs).grid(
+            row=row, column=1, sticky="w", padx=8
+        )
+        row += 1
+
+        ctk.CTkButton(settings, text="Intro video", width=100, command=self._select_intro).grid(
+            row=row, column=0, sticky="w", padx=8, pady=4
+        )
+        ctk.CTkButton(settings, text="Outro video", width=100, command=self._select_outro).grid(
+            row=row, column=1, sticky="w", padx=8, pady=4
+        )
+        row += 1
+
+        self.wm_btn = ctk.CTkButton(settings, text="Branding watermark", width=140, command=self._select_watermark)
+        self.wm_btn.grid(row=row, column=0, columnspan=2, sticky="w", padx=8, pady=4)
         row += 1
 
         ctk.CTkLabel(settings, text="Audio & metadata", font=ctk.CTkFont(weight="bold")).grid(
@@ -236,14 +278,40 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
             self.bgm_path = path
             self.bgm_btn.configure(text=Path(path).name[:20])
 
+    def _select_intro(self):
+        path = filedialog.askopenfilename(title="Select Intro", filetypes=[("Video", "*.mp4 *.mov *.mkv")])
+        if path:
+            self.intro_path = path
+
+    def _select_outro(self):
+        path = filedialog.askopenfilename(title="Select Outro", filetypes=[("Video", "*.mp4 *.mov *.mkv")])
+        if path:
+            self.outro_path = path
+
+    def _select_watermark(self):
+        path = filedialog.askopenfilename(title="Branding Watermark", filetypes=[("Images", "*.png *.jpg *.webp")])
+        if path:
+            self.watermark_path = path
+            self.wm_btn.configure(text=Path(path).name[:24])
+
     def _get_overrides(self) -> dict:
         return {
+            "ai_analysis": {
+                "logo_removal_enabled": self.var_logo_remove.get(),
+                "whisper_subtitles": self.var_whisper.get(),
+                "yolo_enabled": self.var_yolo.get(),
+            },
             "editing": {
                 "speed_change": self.var_speed.get(),
                 "crop_percent": int(self.var_crop.get()),
                 "mirror": self.var_mirror.get(),
                 "auto_cut": self.var_autocut.get(),
                 "color_lut": self.var_color.get(),
+                "logo_removal_enabled": self.var_logo_remove.get(),
+                "intro_path": self.intro_path,
+                "outro_path": self.outro_path,
+                "watermark_path": self.watermark_path,
+                "burn_subtitles": self.var_burn_subs.get(),
             },
             "postprocessing": {
                 "noise_reduction": self.var_noise.get(),

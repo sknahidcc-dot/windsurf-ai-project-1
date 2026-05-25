@@ -1,0 +1,3 @@
+# Optional AI extras (large download)
+openai-whisper>=20231117
+ultralytics>=8.1.0

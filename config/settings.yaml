@@ -17,27 +17,46 @@ ai_analysis:
   min_scene_len: 15
   duplicate_frame_check: true
   duplicate_threshold: 0.95
-  whisper_subtitles: false  # set true if whisper installed
+  # Logo/watermark detection & removal
+  logo_removal_enabled: true
+  # Whisper subtitles (pip install openai-whisper)
+  whisper_subtitles: false
+  whisper_model: base
+  whisper_language: null
+  # YOLO face detection (pip install ultralytics)
+  yolo_enabled: false
+  yolo_model: yolov8n.pt
+  yolo_sample_every: 45
+  yolo_blur_faces: false
 
 editing:
   auto_cut: true
-  remove_duplicates: true
-  speed_change: 1.05          # 5% faster
-  crop_percent: 3             # crop 3% from each edge
-  mirror: false               # horizontal flip
-  color_lut: "cinematic"      # none | warm | cool | cinematic | vivid
-  resolution_scale: null      # e.g. "1920:1080" or null to keep
+  speed_change: 1.05
+  crop_percent: 3
+  mirror: false
+  color_lut: cinematic
+  resolution_scale: null
+  logo_removal_enabled: true
+  manual_logo_regions: []
+  # Intro/outro (set paths in UI or here)
   intro_path: null
   outro_path: null
+  # Branding watermark (your logo)
   watermark_path: null
-  watermark_position: "bottom-right"
+  branding_path: null
+  watermark_position: bottom-right
   watermark_opacity: 0.7
+  watermark_scale: 0.15
+  # Subtitles
+  burn_subtitles: true
+  subtitle_font_size: 22
+  subtitle_margin: 28
 
 postprocessing:
   metadata_rewrite: true
   strip_original_metadata: true
-  custom_title: "Processed Video"
-  custom_artist: "Video Automation Studio"
+  custom_title: Processed Video
+  custom_artist: Video Automation Studio
   noise_reduction: true
   audio_eq: true
   bgm_enabled: false
@@ -45,13 +64,11 @@ postprocessing:
   bgm_volume: 0.15
   audio_fingerprint_shift: true
   pitch_shift_semitones: 0.3
-  tempo_adjust: true
   compress_output: true
-  output_codec: "libx264"
   output_crf: 23
-  output_preset: "medium"
-  output_audio_bitrate: "192k"
+  output_preset: medium
+  output_audio_bitrate: 192k
 
 export:
-  output_dir: "output"
-  filename_suffix: "_processed"
+  output_dir: output
+  filename_suffix: _processed

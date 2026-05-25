@@ -8,6 +8,10 @@ import numpy as np
 
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
+from app.utils.compat_encode import (
+    audio_encode_args, container_args, even_dimensions_filter,
+    run_ffmpeg, video_encode_args,
+)
 
 
 class AudioProcessingModule(BaseModule):
@@ -46,16 +50,18 @@ class AudioProcessingModule(BaseModule):
             processed_audio = self._mix_bgm(processed_audio, context, cfg)
 
         context.report(self.name, 85, "Merging audio back to video...")
-        subprocess.run([
-            "ffmpeg", "-y",
+        args = [
             "-i", str(video),
             "-i", str(processed_audio),
-            "-c:v", "copy",
-            "-map", "0:v:0",
-            "-map", "1:a:0",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-vf", even_dimensions_filter(),
+            *video_encode_args(23, "fast"),
+            *audio_encode_args("192k"),
             "-shortest",
+            *container_args(),
             str(output),
-        ], capture_output=True, check=True)
+        ]
+        run_ffmpeg(args, "Audio merge")
 
         context.current_video = output
         context.current_audio = processed_audio

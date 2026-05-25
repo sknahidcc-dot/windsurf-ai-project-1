@@ -15,10 +15,10 @@ pydub>=0.25.1
 librosa>=0.10.1
 soundfile>=0.12.1
 
-# Scene detection & vision
+# Scene detection
 scenedetect>=0.6.3
 
-# AI (optional - install for full features)
+# AI features (optional - pip install separately if needed)
 # openai-whisper>=20231117
 # ultralytics>=8.1.0
 
@@ -27,5 +27,4 @@ PyYAML>=6.0.1
 tqdm>=4.66.2
 mutagen>=1.47.0
 
-# Note: FFmpeg must be installed on system PATH
-# Download: https://ffmpeg.org/download.html
+# FFmpeg must be on system PATH: https://ffmpeg.org/download.html

@@ -21,6 +21,9 @@ class PipelineContext:
     scene_cuts: list[float] = field(default_factory=list)
     duplicate_segments: list[tuple[float, float]] = field(default_factory=list)
     subtitles: list[dict] = field(default_factory=list)
+    subtitle_path: Path | None = None
+    logo_regions: list[tuple[int, int, int, int]] = field(default_factory=list)
+    face_regions: list[dict] = field(default_factory=list)
     metadata_log: dict = field(default_factory=dict)
 
     # Progress callback: (stage_name, percent, message)

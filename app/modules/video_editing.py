@@ -5,6 +5,10 @@ from pathlib import Path
 
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
+from app.utils.compat_encode import (
+    audio_encode_args, container_args, even_dimensions_filter,
+    run_ffmpeg, video_encode_args,
+)
 
 # FFmpeg cannot cut segments shorter than this (seconds)
 MIN_SEGMENT_DURATION = 0.5
@@ -31,20 +35,22 @@ class VideoEditingModule(BaseModule):
         if speed and speed != 1.0:
             af_filters.append(f"atempo={speed}")
 
-        args = ["-i", str(video)]
         if vf_filters:
-            args.extend(["-vf", ",".join(vf_filters)])
+            vf_filters.append(even_dimensions_filter())
+        else:
+            vf_filters = [even_dimensions_filter()]
+
+        args = ["-i", str(video), "-vf", ",".join(vf_filters)]
         if af_filters:
             args.extend(["-af", ",".join(af_filters)])
-
-        args.extend([
-            "-c:v", "libx264", "-preset", "medium", "-crf", "23",
-            "-c:a", "aac", "-b:a", "192k",
-            str(output),
-        ])
+        args.extend(["-map", "0:v:0", "-map", "0:a:0?"])
+        args.extend(video_encode_args(23, "medium"))
+        args.extend(audio_encode_args("192k"))
+        args.extend(container_args())
+        args.append(str(output))
 
         context.report(self.name, 70, "Rendering video edits...")
-        subprocess.run(["ffmpeg", "-y", *args], capture_output=True, check=True)
+        run_ffmpeg(args, "Video editing")
 
         context.current_video = output
         return ModuleResult(ModuleStatus.SUCCESS, "Video editing complete", {"output": str(output)})
@@ -104,11 +110,15 @@ class VideoEditingModule(BaseModule):
                 f.write(f"file '{p.resolve()}'\n")
 
         cut_output = context.get_working_path("autocut_video.mp4")
-        subprocess.run([
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-            "-i", str(concat_file), "-c", "copy", str(cut_output),
-        ], capture_output=True, check=True)
-
+        args = [
+            "-f", "concat", "-safe", "0", "-i", str(concat_file),
+            "-vf", even_dimensions_filter(),
+            *video_encode_args(23, "fast"),
+            *audio_encode_args("192k"),
+            *container_args(),
+            str(cut_output),
+        ]
+        run_ffmpeg(args, "Auto-cut concat")
         return cut_output
 
     def _merge_ranges(self, ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -165,13 +175,6 @@ class VideoEditingModule(BaseModule):
         scale = cfg.get("resolution_scale")
         if scale:
             filters.append(f"scale={scale}")
-
-        wm_path = cfg.get("watermark_path")
-        if wm_path and Path(wm_path).exists():
-            opacity = cfg.get("watermark_opacity", 0.7)
-            pos = cfg.get("watermark_position", "bottom-right")
-            overlay = self._watermark_position(pos)
-            filters.append(f"movie={wm_path}[wm];[in][wm]overlay={overlay}:format=auto:alpha={opacity}[out]")
 
         return filters
 
