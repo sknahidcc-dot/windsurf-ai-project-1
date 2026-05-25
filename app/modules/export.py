@@ -1,16 +1,24 @@
-"""Final export with Windows-compatible encoding."""
+"""Final export — remux when possible to preserve audio quality."""
 
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
-from app.utils.compat_encode import audio_encode_args, container_args, metadata_args, run_ffmpeg, video_encode_args
+from app.utils.compat_encode import (
+    audio_encode_args,
+    can_remux_copy,
+    container_args,
+    even_dimensions_filter,
+    metadata_args,
+    run_ffmpeg,
+    video_encode_args,
+)
 
 
 class ExportModule(BaseModule):
     name = "export"
-    description = "Export final video with compatible H.264/AAC encoding"
+    description = "Export final video (stream copy when possible)"
 
     def run(self, context: PipelineContext) -> ModuleResult:
         cfg = context.get_setting("postprocessing", default={})
@@ -27,30 +35,36 @@ class ExportModule(BaseModule):
         if context.output_path:
             final_path = Path(context.output_path)
 
-        context.report(self.name, 50, "Exporting Windows-compatible MP4...")
-
-        crf = str(cfg.get("output_crf", 23))
-        preset = cfg.get("output_preset", "medium")
-        abr = cfg.get("output_audio_bitrate", "192k")
-
-        args = ["-i", str(video), "-map", "0:v:0", "-map", "0:a:0?"]
-        args.extend(["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"])
-        args.extend(video_encode_args(int(crf), preset))
-        args.extend(audio_encode_args(abr))
+        context.report(self.name, 50, "Exporting final video...")
+        abr = cfg.get("output_audio_bitrate", "256k")
+        meta = None
 
         if cfg.get("metadata_rewrite", True):
-            title = cfg.get("custom_title", "Processed Video")
-            artist = cfg.get("custom_artist", "Video Automation Studio")
-            creation_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            args.extend(metadata_args(title, artist, creation_time))
-            context.metadata_log["export"] = {
-                "title": title, "artist": artist, "creation_time": creation_time,
+            meta = {
+                "title": cfg.get("custom_title", "Processed Video"),
+                "artist": cfg.get("custom_artist", "Video Automation Studio"),
+                "creation_time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
+            context.metadata_log["export"] = meta
 
-        args.extend(container_args())
-        args.append(str(final_path))
-
-        run_ffmpeg(args, "Export")
+        # Remux without re-encoding — keeps audio crystal clear
+        if can_remux_copy(video):
+            args = ["-i", str(video), "-map", "0", "-c", "copy"]
+            if meta:
+                args.extend(metadata_args(meta["title"], meta["artist"], meta["creation_time"]))
+            args.extend(container_args())
+            args.append(str(final_path))
+            run_ffmpeg(args, "Export remux")
+        else:
+            args = ["-i", str(video), "-map", "0:v:0", "-map", "0:a:0?"]
+            args.extend(["-vf", even_dimensions_filter()])
+            args.extend(video_encode_args(int(cfg.get("output_crf", 23)), cfg.get("output_preset", "medium")))
+            args.extend(audio_encode_args(abr))
+            if meta:
+                args.extend(metadata_args(meta["title"], meta["artist"], meta["creation_time"]))
+            args.extend(container_args())
+            args.append(str(final_path))
+            run_ffmpeg(args, "Export encode")
 
         context.output_path = final_path
         context.current_video = final_path

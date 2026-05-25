@@ -57,17 +57,21 @@ postprocessing:
   strip_original_metadata: true
   custom_title: Processed Video
   custom_artist: Video Automation Studio
-  noise_reduction: true
+  # Audio clarity (recommended defaults)
+  audio_mode: clear          # clear | enhance | fingerprint
+  audio_enhance: true        # gentle clarity boost (speech/music)
+  audio_preserve_original: false
+  noise_reduction: false     # off by default — NR makes audio muddy
   audio_eq: true
   bgm_enabled: false
   bgm_path: null
-  bgm_volume: 0.15
-  audio_fingerprint_shift: true
-  pitch_shift_semitones: 0.3
+  bgm_volume: 0.12
+  audio_fingerprint_shift: false
+  pitch_shift_semitones: 0.15
   compress_output: true
   output_crf: 23
   output_preset: medium
-  output_audio_bitrate: 192k
+  output_audio_bitrate: 256k
 
 export:
   output_dir: output

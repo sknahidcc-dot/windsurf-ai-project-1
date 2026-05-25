@@ -98,9 +98,9 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         self.var_whisper = ctk.BooleanVar(value=ai_cfg.get("whisper_subtitles", False))
         self.var_yolo = ctk.BooleanVar(value=ai_cfg.get("yolo_enabled", False))
         self.var_burn_subs = ctk.BooleanVar(value=edit_cfg.get("burn_subtitles", True))
-        self.var_noise = ctk.BooleanVar(value=post_cfg.get("noise_reduction", True))
-        self.var_eq = ctk.BooleanVar(value=post_cfg.get("audio_eq", True))
-        self.var_fingerprint = ctk.BooleanVar(value=post_cfg.get("audio_fingerprint_shift", True))
+        self.var_noise = ctk.BooleanVar(value=post_cfg.get("noise_reduction", False))
+        self.var_eq = ctk.BooleanVar(value=post_cfg.get("audio_enhance", post_cfg.get("audio_eq", True)))
+        self.var_fingerprint = ctk.BooleanVar(value=post_cfg.get("audio_fingerprint_shift", False))
         self.var_metadata = ctk.BooleanVar(value=post_cfg.get("metadata_rewrite", True))
         self.var_bgm = ctk.BooleanVar(value=post_cfg.get("bgm_enabled", False))
 
@@ -180,11 +180,11 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
         )
         row += 1
 
-        ctk.CTkCheckBox(settings, text="Noise reduction", variable=self.var_noise).grid(row=row, column=0, sticky="w", padx=8)
-        ctk.CTkCheckBox(settings, text="Audio EQ", variable=self.var_eq).grid(row=row, column=1, sticky="w", padx=8)
+        ctk.CTkCheckBox(settings, text="Light noise reduction", variable=self.var_noise).grid(row=row, column=0, sticky="w", padx=8)
+        ctk.CTkCheckBox(settings, text="Enhance clarity", variable=self.var_eq).grid(row=row, column=1, sticky="w", padx=8)
         row += 1
 
-        ctk.CTkCheckBox(settings, text="Audio fingerprint shift", variable=self.var_fingerprint).grid(
+        ctk.CTkCheckBox(settings, text="Fingerprint shift (lowers clarity)", variable=self.var_fingerprint).grid(
             row=row, column=0, sticky="w", padx=8
         )
         ctk.CTkCheckBox(settings, text="Rewrite metadata", variable=self.var_metadata).grid(
@@ -315,8 +315,10 @@ class MainWindow(TkinterDnD.Tk if HAS_DND else ctk.CTk):
             },
             "postprocessing": {
                 "noise_reduction": self.var_noise.get(),
+                "audio_enhance": self.var_eq.get(),
                 "audio_eq": self.var_eq.get(),
                 "audio_fingerprint_shift": self.var_fingerprint.get(),
+                "audio_mode": "fingerprint" if self.var_fingerprint.get() else "clear",
                 "metadata_rewrite": self.var_metadata.get(),
                 "bgm_enabled": self.var_bgm.get(),
                 "bgm_path": self.bgm_path,

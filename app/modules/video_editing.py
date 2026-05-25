@@ -6,8 +6,8 @@ from pathlib import Path
 from app.modules.base import BaseModule, ModuleResult, ModuleStatus
 from app.pipeline.context import PipelineContext
 from app.utils.compat_encode import (
-    audio_encode_args, container_args, even_dimensions_filter,
-    run_ffmpeg, video_encode_args,
+    audio_encode_args, audio_resample_filter, container_args,
+    even_dimensions_filter, run_ffmpeg, video_encode_args,
 )
 
 # FFmpeg cannot cut segments shorter than this (seconds)
@@ -33,7 +33,9 @@ class VideoEditingModule(BaseModule):
 
         speed = cfg.get("speed_change", 1.0)
         if speed and speed != 1.0:
-            af_filters.append(f"atempo={speed}")
+            af_filters.append(
+                f"atempo={speed},{audio_resample_filter()}"
+            )
 
         if vf_filters:
             vf_filters.append(even_dimensions_filter())
@@ -45,7 +47,9 @@ class VideoEditingModule(BaseModule):
             args.extend(["-af", ",".join(af_filters)])
         args.extend(["-map", "0:v:0", "-map", "0:a:0?"])
         args.extend(video_encode_args(23, "medium"))
-        args.extend(audio_encode_args("192k"))
+        post_cfg = context.get_setting("postprocessing", default={})
+        abr = post_cfg.get("output_audio_bitrate", "256k") if isinstance(post_cfg, dict) else "256k"
+        args.extend(audio_encode_args(abr))
         args.extend(container_args())
         args.append(str(output))
 

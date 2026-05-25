@@ -1,5 +1,6 @@
 """Windows Media Player compatible H.264/AAC encoding settings."""
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -20,13 +21,20 @@ def video_encode_args(crf: int = 23, preset: str = "medium") -> list[str]:
     ]
 
 
-def audio_encode_args(bitrate: str = "192k") -> list[str]:
+def audio_encode_args(bitrate: str = "256k") -> list[str]:
+    """High-quality AAC tuned for clear speech and music."""
     return [
         "-c:a", "aac",
         "-ar", "48000",
         "-ac", "2",
         "-b:a", bitrate,
+        "-aac_coder", "twoloop",
     ]
+
+
+def audio_resample_filter() -> str:
+    """High-quality resampler (use in -af chains)."""
+    return "aresample=48000:resampler=soxr"
 
 
 def container_args() -> list[str]:
@@ -51,52 +59,31 @@ def run_ffmpeg(args: list[str], label: str = "FFmpeg") -> None:
         raise RuntimeError(f"{label} failed: {err}")
 
 
-def encode_video(
-    input_path: Path | str,
-    output_path: Path | str,
-    *,
-    vf_filters: list[str] | None = None,
-    af_filters: list[str] | None = None,
-    crf: int = 23,
-    preset: str = "medium",
-    audio_bitrate: str = "192k",
-    metadata: dict | None = None,
-    extra_inputs: list[str] | None = None,
-    filter_complex: str | None = None,
-    map_video: str = "0:v:0",
-    map_audio: str = "0:a:0?",
-) -> None:
-    """Re-encode to a Windows-compatible MP4."""
-    inputs = ["-i", str(input_path)]
-    if extra_inputs:
-        for ex in extra_inputs:
-            inputs.extend(["-i", str(ex)])
+def probe_streams(path: Path | str) -> dict:
+    """Return video/audio codec info for stream-copy decisions."""
+    cmd = [
+        "ffprobe", "-v", "quiet", "-print_format", "json",
+        "-show_streams", str(path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    data = json.loads(proc.stdout)
+    video = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), {})
+    audio = next((s for s in data.get("streams", []) if s.get("codec_type") == "audio"), {})
+    return {
+        "video_codec": video.get("codec_name", ""),
+        "pix_fmt": video.get("pix_fmt", ""),
+        "audio_codec": audio.get("codec_name", ""),
+    }
 
-    args = inputs
 
-    if filter_complex:
-        args.extend(["-filter_complex", filter_complex])
-    else:
-        vf = list(vf_filters or [])
-        if vf:
-            vf.append(even_dimensions_filter())
-            args.extend(["-vf", ",".join(vf)])
-        elif not vf_filters:
-            args.extend(["-vf", even_dimensions_filter()])
-        if af_filters:
-            args.extend(["-af", ",".join(af_filters)])
-
-    args.extend(["-map", map_video, "-map", map_audio])
-    args.extend(video_encode_args(crf, preset))
-    args.extend(audio_encode_args(audio_bitrate))
-
-    if metadata:
-        args.extend(metadata_args(
-            metadata.get("title", "Processed Video"),
-            metadata.get("artist", "Video Automation Studio"),
-            metadata.get("creation_time", ""),
-        ))
-
-    args.extend(container_args())
-    args.append(str(output_path))
-    run_ffmpeg(args)
+def can_remux_copy(path: Path | str) -> bool:
+    """True if file can be remuxed without re-encode (H.264 + AAC)."""
+    try:
+        info = probe_streams(path)
+        return (
+            info.get("video_codec") == "h264"
+            and info.get("pix_fmt") == "yuv420p"
+            and info.get("audio_codec") in ("aac", "mp4a")
+        )
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
+        return False
