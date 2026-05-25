@@ -1,0 +1,57 @@
+# Video Automation Studio - Default Settings
+
+pipeline:
+  enabled_stages:
+    - preprocessing
+    - ai_analysis
+    - editing
+    - postprocessing
+
+preprocessing:
+  validate_input: true
+  extract_probe: true
+
+ai_analysis:
+  scene_detection: true
+  scene_threshold: 27.0
+  min_scene_len: 15
+  duplicate_frame_check: true
+  duplicate_threshold: 0.95
+  whisper_subtitles: false  # set true if whisper installed
+
+editing:
+  auto_cut: true
+  remove_duplicates: true
+  speed_change: 1.05          # 5% faster
+  crop_percent: 3             # crop 3% from each edge
+  mirror: false               # horizontal flip
+  color_lut: "cinematic"      # none | warm | cool | cinematic | vivid
+  resolution_scale: null      # e.g. "1920:1080" or null to keep
+  intro_path: null
+  outro_path: null
+  watermark_path: null
+  watermark_position: "bottom-right"
+  watermark_opacity: 0.7
+
+postprocessing:
+  metadata_rewrite: true
+  strip_original_metadata: true
+  custom_title: "Processed Video"
+  custom_artist: "Video Automation Studio"
+  noise_reduction: true
+  audio_eq: true
+  bgm_enabled: false
+  bgm_path: null
+  bgm_volume: 0.15
+  audio_fingerprint_shift: true
+  pitch_shift_semitones: 0.3
+  tempo_adjust: true
+  compress_output: true
+  output_codec: "libx264"
+  output_crf: 23
+  output_preset: "medium"
+  output_audio_bitrate: "192k"
+
+export:
+  output_dir: "output"
+  filename_suffix: "_processed"

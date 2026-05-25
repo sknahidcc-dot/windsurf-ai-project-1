@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.video_automation_temp/
+output/*.mp4
+output/*.mov
+output/*.mkv
+*.log
+.DS_Store
